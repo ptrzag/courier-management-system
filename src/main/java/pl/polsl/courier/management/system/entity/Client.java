@@ -2,6 +2,8 @@ package pl.polsl.courier.management.system.entity;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -21,10 +23,10 @@ public class Client {
 	
 	String firstName;
 	String lastName;
-	String email; 
+	String email;
 	String phoneNumber;
 	private String address;
 	
-	@OneToMany(mappedBy = "client", fetch = FetchType.LAZY)
+	@OneToMany
 	private List<Parcel> parcels;
 }

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -35,4 +36,8 @@ public class Parcel {
 	@ManyToOne
 	@JoinColumn(name = "client_id")
 	private Client client;
+	
+	@ManyToOne
+	@JoinColumn(name = "route_id")
+	private RoutePlan route;
 }
