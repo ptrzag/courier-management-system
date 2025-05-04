@@ -2,6 +2,8 @@ package pl.polsl.courier.management.system.entity;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -13,16 +15,17 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
-public class Client {
+public class Car {
 	@Id
 	@GeneratedValue(strategy = GenerationType.AUTO)
 	private Long id;
-	private String firstName;
-	private String lastName;
-	private String email;
-	private String phoneNumber;
-	private String address;
+	private String brand;
+	private String model;
+	private String registrationNumber;
+	private int mileage;
+	private double capacity;
 	
-	@OneToMany(mappedBy = "client")
-	private List<Parcel> parcels;
+	@JsonIgnore
+	@OneToMany(mappedBy = "car")
+	private List<RoutePlan> routes;
 }

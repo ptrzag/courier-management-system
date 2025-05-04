@@ -18,7 +18,7 @@ VALUES
 (2, 'Katowice', 'Poznań', 400.0, 300, DATE '2025-04-26', 2);
 
 --PARCEL--
-INSERT INTO parcel (id, content_description, sender_address, recipient_address, dispatch_date, delivery_date, weight, price, client_id, route_plan_id)
+INSERT INTO parcel (id, content_description, sender_address, recipient_address, dispatch_date, delivery_date, weight, price, client_id, route_id)
 VALUES 
 (1, 'Dokumenty firmowe', 'ul. Kwiatowa 5, 00-123 Warszawa', 'ul. Polna 2, 00-321 Warszawa', TIMESTAMP '2025-04-24 08:00:00', TIMESTAMP '2025-04-24 12:00:00', 0.5, 25.00, 1, 1),
 (2, 'Prezent urodzinowy', 'ul. Leśna 12, 40-200 Katowice', 'ul. Długa 77, 00-500 Warszawa', TIMESTAMP '2025-04-23 15:00:00', TIMESTAMP '2025-04-25 10:00:00', 2.0, 50.00, 2, 1),

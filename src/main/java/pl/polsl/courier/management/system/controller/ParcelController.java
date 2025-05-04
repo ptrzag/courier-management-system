@@ -28,7 +28,7 @@ public class ParcelController {
 	}
 	
 	@GetMapping
-	public @ResponseBody Optional<Parcel> getParcels(@RequestParam Long id) {
+	public @ResponseBody Optional<Parcel> getParcel(@RequestParam Long id) {
 		return parcelRepo.findById(id);
 	}
 }
