@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -31,7 +32,7 @@ public class RoutePlan {
 	private LocalDate scheduleDate;
 	
 	@JsonIgnore
-	@OneToMany(mappedBy = "routePlan")
+	@OneToMany(mappedBy = "routePlan", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<Parcel> parcel;
 	
 	@ManyToOne
