@@ -4,6 +4,7 @@
 *.war
 *.nar
 *.ear
+/bin/
 
 # === Maven ===
 /target/
