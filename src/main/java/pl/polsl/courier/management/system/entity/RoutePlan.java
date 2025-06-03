@@ -3,17 +3,9 @@ package pl.polsl.courier.management.system.entity;
 import java.time.LocalDate;
 import java.util.List;
 
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Pattern;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,21 +13,48 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RoutePlan {
-	@Id
-	@GeneratedValue(strategy = GenerationType.AUTO)
-	private Long id;
-	private String startLocation;
-	private String endLocation;
-	private Double distance;
-	private Integer estimatedTime;
-	@Column(name = "scheduled_date")
-	private LocalDate scheduleDate;
-	
-	@JsonIgnore
-	@OneToMany(mappedBy = "routePlan", cascade = CascadeType.ALL, orphanRemoval = true)
-	private List<Parcel> parcel;
-	
-	@ManyToOne
-	@JoinColumn(name = "car_id")
-	private Car car;
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    // Wymuszony format: "<dowolny tekst bez przecinka>, <2 cyfry>-<3 cyfry> <dowolny tekst>"
+    @Pattern(
+      regexp = "^[^,]+,\\s*\\d{2}-\\d{3}\\s+.+$",
+      message = "Format adresu: 'ul. Przykładowa 10, 00-950 Warszawa'"
+    )
+    private String startLocation;
+
+    @Pattern(
+      regexp = "^[^,]+,\\s*\\d{2}-\\d{3}\\s+.+$",
+      message = "Format adresu: 'ul. Przykładowa 10, 00-950 Warszawa'"
+    )
+    private String endLocation;
+
+    private Double distance;
+    private Integer estimatedTime;
+
+    @Column(name = "scheduled_date")
+    private LocalDate scheduleDate;
+
+    @ElementCollection
+    @CollectionTable(
+        name = "route_stops",
+        joinColumns = @JoinColumn(name = "route_plan_id")
+    )
+    @Column(name = "stop_address")
+    private List<
+      @Pattern(
+        regexp = "^[^,]+,\\s*\\d{2}-\\d{3}\\s+.+$",
+        message = "Format przystanku: 'ul. Przykładowa 10, 00-950 Warszawa'"
+      )
+      String
+    > stops;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "routePlan", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Parcel> parcel;
+
+    @ManyToOne
+    @JoinColumn(name = "car_id")
+    private Car car;
 }
