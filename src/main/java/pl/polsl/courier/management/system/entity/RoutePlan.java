@@ -50,7 +50,7 @@ public class RoutePlan {
       String
     > stops;
 
-    @JsonIgnore
+    //@JsonIgnore - mozliwe ze konieczny, ale inaczej nie dziala update
     @OneToMany(mappedBy = "routePlan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Parcel> parcel;
 

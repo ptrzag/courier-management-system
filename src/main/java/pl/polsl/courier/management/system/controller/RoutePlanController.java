@@ -38,7 +38,7 @@ public class RoutePlanController {
         return routePlanRepo.findByScheduleDate(scheduleDate);
     }
 
-    @PostMapping("/update")
+    @PutMapping("/update")
     public String updateRoutePlan(@Valid @RequestBody RoutePlan routePlan) {
         if (routePlan.getId() == null || !routePlanRepo.existsById(routePlan.getId())) {
             return "RoutePlan not found.";
@@ -47,7 +47,7 @@ public class RoutePlanController {
         return "RoutePlan updated.";
     }
 
-    @PostMapping("/delete")
+    @DeleteMapping("/delete")
     public String deleteRoutePlan(@RequestParam Long id) {
         if (!routePlanRepo.existsById(id)) {
             return "RoutePlan not found.";
