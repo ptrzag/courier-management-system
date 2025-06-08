@@ -1,5 +1,6 @@
 package pl.polsl.courier.management.system.entity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.CascadeType;
@@ -25,5 +26,5 @@ public class Client {
 	private String address;
 	
 	@OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
-	private List<Parcel> parcels;
+	private List<Parcel> parcels = new ArrayList<>();
 }

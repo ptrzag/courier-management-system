@@ -1,6 +1,7 @@
 package pl.polsl.courier.management.system.entity;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.*;
@@ -52,7 +53,7 @@ public class RoutePlan {
 
     //@JsonIgnore - mozliwe ze konieczny, ale inaczej nie dziala update
     @OneToMany(mappedBy = "routePlan", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Parcel> parcel;
+    private List<Parcel> parcel = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "car_id")
