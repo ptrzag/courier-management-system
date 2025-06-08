@@ -1,82 +1,143 @@
 package pl.polsl.courier.management.system.controller;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import pl.polsl.courier.management.system.entity.Client;
 
+import pl.polsl.courier.management.system.dto.ClientDTO;
+import pl.polsl.courier.management.system.entity.Client;
 import pl.polsl.courier.management.system.repository.ClientRepository;
 
-@RestController            
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
+
+@RestController
 @RequestMapping("/client")
 public class ClientController {
-	@Autowired
+
+    @Autowired
     private ClientRepository clientRepo;
 
     @PostMapping
-    public Client addClient(@RequestBody Client client) {
-        return clientRepo.save(client);
+    public ResponseEntity<EntityModel<ClientDTO>> addClient(@RequestBody ClientDTO dto) {
+        Client client = new Client();
+        client.setFirstName(dto.getFirstName());
+        client.setLastName(dto.getLastName());
+        client.setEmail(dto.getEmail());
+        client.setPhoneNumber(dto.getPhoneNumber());
+        client.setAddress(dto.getAddress());
+
+        Client saved = clientRepo.save(client);
+        ClientDTO savedDto = new ClientDTO(saved);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                EntityModel.of(savedDto,
+                        linkTo(methodOn(ClientController.class).getById(savedDto.getId())).withSelfRel()));
     }
 
     @PutMapping("/update/{id}")
-    public Client updateClient(@PathVariable Long id,
-                               @RequestBody Client details) {
+    public ResponseEntity<EntityModel<ClientDTO>> updateClient(@PathVariable Long id,
+                                                                @RequestBody ClientDTO dto) {
         return clientRepo.findById(id)
-            .map(c -> {
-                c.setFirstName(details.getFirstName());
-                c.setLastName(details.getLastName());
-                c.setEmail(details.getEmail());
-                c.setPhoneNumber(details.getPhoneNumber());
-                c.setAddress(details.getAddress());
-                return clientRepo.save(c);
-            })
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found"));
+                .map(c -> {
+                    c.setFirstName(dto.getFirstName());
+                    c.setLastName(dto.getLastName());
+                    c.setEmail(dto.getEmail());
+                    c.setPhoneNumber(dto.getPhoneNumber());
+                    c.setAddress(dto.getAddress());
+
+                    Client updated = clientRepo.save(c);
+                    ClientDTO updatedDto = new ClientDTO(updated);
+
+                    return ResponseEntity.ok(EntityModel.of(updatedDto,
+                            linkTo(methodOn(ClientController.class).getById(updatedDto.getId())).withSelfRel()));
+                })
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found"));
     }
 
     @DeleteMapping("/delete/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteClient(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteClient(@PathVariable Long id) {
         if (!clientRepo.existsById(id))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found");
         clientRepo.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<EntityModel<ClientDTO>> getById(@PathVariable Long id) {
+        return clientRepo.findById(id)
+                .map(client -> {
+                    ClientDTO dto = new ClientDTO(client);
+                    return ResponseEntity.ok(EntityModel.of(dto,
+                            linkTo(methodOn(ClientController.class).getById(id)).withSelfRel(),
+                            linkTo(methodOn(ClientController.class).getByEmail(dto.getEmail())).withRel("byEmail")));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/search/firstName")
-    public List<Client> getByFirstName(@RequestParam String firstName) {
-        return clientRepo.findByFirstName(firstName);
+    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByFirstName(@RequestParam String firstName) {
+        List<EntityModel<ClientDTO>> clients = clientRepo.findByFirstName(firstName).stream()
+                .map(c -> EntityModel.of(new ClientDTO(c),
+                        linkTo(methodOn(ClientController.class).getById(c.getId())).withSelfRel()))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByFirstName(firstName)).withSelfRel()));
     }
 
     @GetMapping("/search/lastName")
-    public List<Client> getByLastName(@RequestParam String lastName) {
-        return clientRepo.findByLastName(lastName);
+    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByLastName(@RequestParam String lastName) {
+        List<EntityModel<ClientDTO>> clients = clientRepo.findByLastName(lastName).stream()
+                .map(c -> EntityModel.of(new ClientDTO(c),
+                        linkTo(methodOn(ClientController.class).getById(c.getId())).withSelfRel()))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByLastName(lastName)).withSelfRel()));
     }
 
     @GetMapping("/search/email")
-    public Client getByEmail(@RequestParam String email) {
-        return clientRepo.findByEmail(email).orElse(null);
+    public ResponseEntity<EntityModel<ClientDTO>> getByEmail(@RequestParam String email) {
+        return clientRepo.findByEmail(email)
+                .map(client -> {
+                    ClientDTO dto = new ClientDTO(client);
+                    return ResponseEntity.ok(EntityModel.of(dto,
+                            linkTo(methodOn(ClientController.class).getByEmail(email)).withSelfRel(),
+                            linkTo(methodOn(ClientController.class).getById(dto.getId())).withRel("byId")));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/search/phone")
-    public List<Client> getByPhoneNumber(@RequestParam String phoneNumber) {
-        return clientRepo.findByPhoneNumber(phoneNumber);
+    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByPhoneNumber(@RequestParam String phoneNumber) {
+        List<EntityModel<ClientDTO>> clients = clientRepo.findByPhoneNumber(phoneNumber).stream()
+                .map(c -> EntityModel.of(new ClientDTO(c),
+                        linkTo(methodOn(ClientController.class).getById(c.getId())).withSelfRel()))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByPhoneNumber(phoneNumber)).withSelfRel()));
     }
 
     @GetMapping("/search/name")
-    public List<Client> getByFirstAndLastName(@RequestParam String firstName,
-                                              @RequestParam String lastName) {
-        return clientRepo.findByFirstNameAndLastName(firstName, lastName);
+    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByFirstAndLastName(
+            @RequestParam String firstName,
+            @RequestParam String lastName) {
+
+        List<EntityModel<ClientDTO>> clients = clientRepo.findByFirstNameAndLastName(firstName, lastName).stream()
+                .map(c -> EntityModel.of(new ClientDTO(c),
+                        linkTo(methodOn(ClientController.class).getById(c.getId())).withSelfRel()))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByFirstAndLastName(firstName, lastName)).withSelfRel()));
     }
 }

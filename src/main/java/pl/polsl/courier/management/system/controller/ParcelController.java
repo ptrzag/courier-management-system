@@ -6,140 +6,136 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
+import pl.polsl.courier.management.system.dto.ParcelDTO;
 import pl.polsl.courier.management.system.entity.Parcel;
-import pl.polsl.courier.management.system.entity.Client;
-import pl.polsl.courier.management.system.entity.RoutePlan;
 import pl.polsl.courier.management.system.repository.ParcelRepository;
 import pl.polsl.courier.management.system.repository.ClientRepository;
 import pl.polsl.courier.management.system.repository.RoutePlanRepository;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
 @RestController
 @RequestMapping("/parcel")
 public class ParcelController {
 
-    @Autowired
-    private ParcelRepository parcelRepo;
+    @Autowired private ParcelRepository parcelRepo;
+    @Autowired private ClientRepository clientRepo;
+    @Autowired private RoutePlanRepository routePlanRepo;
 
-    @Autowired
-    private ClientRepository clientRepo;
-
-    @Autowired
-    private RoutePlanRepository routePlanRepo;
-
-    /**
-     * Create a new Parcel, linking it to an existing Client and RoutePlan.
-     * @param parcel        the parcel data (without client/routePlan)
-     * @param clientId      ID of the existing Client
-     * @param routePlanId   ID of the existing RoutePlan
-     */
+    // CREATE
     @PostMapping
-    public ResponseEntity<String> addParcel(
-            @RequestBody Parcel parcel,
-            @RequestParam Long clientId,
-            @RequestParam Long routePlanId
-    ) {
-        Optional<Client> clientOpt = clientRepo.findById(clientId);
-        if (!clientOpt.isPresent()) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Client with id=" + clientId + " not found");
+    public ResponseEntity<EntityModel<ParcelDTO>> addParcel(@RequestBody ParcelDTO dto) {
+        Parcel p = new Parcel();
+        p.setContentDescription(dto.getContentDescription());
+        p.setSenderAddress(dto.getSenderAddress());
+        p.setRecipientAddress(dto.getRecipientAddress());
+        p.setDispatchDate(dto.getDispatchDate());
+        p.setDeliveryDate(dto.getDeliveryDate());
+        p.setWeight(dto.getWeight());
+        p.setPrice(dto.getPrice());
+
+        if (dto.getClientId() != null) {
+            clientRepo.findById(dto.getClientId()).ifPresent(p::setClient);
+        }
+        if (dto.getRoutePlanId() != null) {
+            routePlanRepo.findById(dto.getRoutePlanId()).ifPresent(p::setRoutePlan);
         }
 
-        Optional<RoutePlan> routeOpt = routePlanRepo.findById(routePlanId);
-        if (!routeOpt.isPresent()) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("RoutePlan with id=" + routePlanId + " not found");
-        }
+        Parcel saved = parcelRepo.save(p);
+        ParcelDTO savedDto = new ParcelDTO(saved);
 
-        parcel.setClient(clientOpt.get());
-        parcel.setRoutePlan(routeOpt.get());
-        Parcel saved = parcelRepo.save(parcel);
-        return ResponseEntity.ok("Added with id = " + saved.getId());
+        EntityModel<ParcelDTO> model = EntityModel.of(savedDto,
+            linkTo(methodOn(ParcelController.class).getParcel(savedDto.getId())).withSelfRel(),
+            linkTo(methodOn(ClientController.class).getById(savedDto.getClientId())).withRel("client"),
+            linkTo(methodOn(RoutePlanController.class).getRoutePlan(savedDto.getRoutePlanId())).withRel("routePlan")
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(model);
     }
 
-    /**
-     * Get one Parcel by its ID.
-     * @param id  the parcel's ID
-     */
+    // READ ONE
     @GetMapping("/{id}")
-    public ResponseEntity<Parcel> getParcel(@PathVariable Long id) {
+    public ResponseEntity<EntityModel<ParcelDTO>> getParcel(@PathVariable Long id) {
         return parcelRepo.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+            .map(p -> {
+                ParcelDTO dto = new ParcelDTO(p);
+                EntityModel<ParcelDTO> model = EntityModel.of(dto,
+                    linkTo(methodOn(ParcelController.class).getParcel(id)).withSelfRel(),
+                    linkTo(methodOn(ClientController.class).getById(dto.getClientId())).withRel("client"),
+                    linkTo(methodOn(RoutePlanController.class).getRoutePlan(dto.getRoutePlanId())).withRel("routePlan")
+                );
+                return ResponseEntity.ok(model);
+            })
+            .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Get all Parcels.
-     */
+    // READ ALL
     @GetMapping
-    public ResponseEntity<List<Parcel>> getAllParcels() {
-        List<Parcel> list = StreamSupport
-                .stream(parcelRepo.findAll().spliterator(), false)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(list);
+    public ResponseEntity<CollectionModel<EntityModel<ParcelDTO>>> getAllParcels() {
+        List<EntityModel<ParcelDTO>> list = StreamSupport.stream(parcelRepo.findAll().spliterator(), false)
+            .map(p -> {
+                ParcelDTO dto = new ParcelDTO(p);
+                return EntityModel.of(dto,
+                    linkTo(methodOn(ParcelController.class).getParcel(p.getId())).withSelfRel()
+                );
+            })
+            .collect(Collectors.toList());
+
+        return ResponseEntity.ok(CollectionModel.of(list,
+            linkTo(methodOn(ParcelController.class).getAllParcels()).withSelfRel()));
     }
 
-    /**
-     * Update an existing Parcel. You can also reassign Client or RoutePlan.
-     * @param id            the ID of the parcel to update
-     * @param details       the new parcel data
-     * @param clientId      (optional) new Client ID
-     * @param routePlanId   (optional) new RoutePlan ID
-     */
+    // UPDATE
     @PutMapping("/{id}")
-    public ResponseEntity<String> updateParcel(
+    public ResponseEntity<EntityModel<ParcelDTO>> updateParcel(
             @PathVariable Long id,
-            @RequestBody Parcel details,
-            @RequestParam(required = false) Long clientId,
-            @RequestParam(required = false) Long routePlanId
-    ) {
-        Optional<Parcel> existingOpt = parcelRepo.findById(id);
-        if (!existingOpt.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Parcel not found");
-        }
+            @RequestBody ParcelDTO dto) {
 
-        Parcel parcel = existingOpt.get();
-        parcel.setContentDescription(details.getContentDescription());
-        parcel.setSenderAddress(details.getSenderAddress());
-        parcel.setRecipientAddress(details.getRecipientAddress());
-        parcel.setDispatchDate(details.getDispatchDate());
-        parcel.setDeliveryDate(details.getDeliveryDate());
-        parcel.setWeight(details.getWeight());
-        parcel.setPrice(details.getPrice());
+        return parcelRepo.findById(id)
+            .map(p -> {
+                // update fields
+                p.setContentDescription(dto.getContentDescription());
+                p.setSenderAddress(dto.getSenderAddress());
+                p.setRecipientAddress(dto.getRecipientAddress());
+                p.setDispatchDate(dto.getDispatchDate());
+                p.setDeliveryDate(dto.getDeliveryDate());
+                p.setWeight(dto.getWeight());
+                p.setPrice(dto.getPrice());
 
-        if (clientId != null) {
-            Optional<Client> clientOpt = clientRepo.findById(clientId);
-            if (!clientOpt.isPresent()) {
-                return ResponseEntity
-                        .status(HttpStatus.BAD_REQUEST)
-                        .body("Client with id=" + clientId + " not found");
-            }
-            parcel.setClient(clientOpt.get());
-        }
+                // client
+                if (dto.getClientId() != null) {
+                    clientRepo.findById(dto.getClientId()).ifPresent(p::setClient);
+                } else {
+                    p.setClient(null);
+                }
+                // routePlan
+                if (dto.getRoutePlanId() != null) {
+                    routePlanRepo.findById(dto.getRoutePlanId()).ifPresent(p::setRoutePlan);
+                } else {
+                    p.setRoutePlan(null);
+                }
 
-        if (routePlanId != null) {
-            Optional<RoutePlan> routeOpt = routePlanRepo.findById(routePlanId);
-            if (!routeOpt.isPresent()) {
-                return ResponseEntity
-                        .status(HttpStatus.BAD_REQUEST)
-                        .body("RoutePlan with id=" + routePlanId + " not found");
-            }
-            parcel.setRoutePlan(routeOpt.get());
-        }
+                Parcel updated = parcelRepo.save(p);
+                ParcelDTO updatedDto = new ParcelDTO(updated);
 
-        parcelRepo.save(parcel);
-        return ResponseEntity.ok("Parcel updated");
+                EntityModel<ParcelDTO> model = EntityModel.of(updatedDto,
+                    linkTo(methodOn(ParcelController.class).getParcel(id)).withSelfRel(),
+                    linkTo(methodOn(ClientController.class).getById(updatedDto.getClientId())).withRel("client"),
+                    linkTo(methodOn(RoutePlanController.class).getRoutePlan(updatedDto.getRoutePlanId())).withRel("routePlan")
+                );
+                return ResponseEntity.ok(model);
+            })
+            .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Delete a Parcel by its ID.
-     * @param id  the parcel's ID
-     */
+    // DELETE
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteParcel(@PathVariable Long id) {
         if (!parcelRepo.existsById(id)) {

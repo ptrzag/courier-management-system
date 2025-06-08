@@ -3,15 +3,24 @@ package pl.polsl.courier.management.system.controller;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import pl.polsl.courier.management.system.dto.RoutePlanDTO;
 import pl.polsl.courier.management.system.entity.RoutePlan;
+import pl.polsl.courier.management.system.entity.Parcel;
+import pl.polsl.courier.management.system.repository.CarRepository;
 import pl.polsl.courier.management.system.repository.RoutePlanRepository;
+import pl.polsl.courier.management.system.repository.ParcelRepository;
 
-import jakarta.validation.Valid;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
 @RestController
 @RequestMapping("/route")
@@ -21,68 +30,190 @@ public class RoutePlanController {
     @Autowired
     private RoutePlanRepository routePlanRepo;
 
+    @Autowired
+    private CarRepository carRepo;
+
+    @Autowired
+    private ParcelRepository parcelRepo;
+
+    // -------- CREATE --------
     @PostMapping
-    public String addRoutePlan(@Valid @RequestBody RoutePlan routePlan) {
-        routePlan = routePlanRepo.save(routePlan);
-        return "Added with id = " + routePlan.getId();
-    }
+    public ResponseEntity<EntityModel<RoutePlanDTO>> addRoutePlan(
+            @Valid @RequestBody RoutePlanDTO dto) {
 
-    @GetMapping
-    public Optional<RoutePlan> getRoutePlan(@RequestParam Long id) {
-        return routePlanRepo.findById(id);
-    }
+        RoutePlan route = new RoutePlan();
+        route.setStartLocation(dto.getStartLocation());
+        route.setEndLocation(dto.getEndLocation());
+        route.setDistance(dto.getDistance());
+        route.setEstimatedTime(dto.getEstimatedTime());
+        route.setScheduleDate(dto.getScheduleDate());
+        route.setStops(dto.getStops());
 
-    @GetMapping("/by-date")
-    public List<RoutePlan> getByScheduleDate(@RequestParam String date) {
-        LocalDate scheduleDate = LocalDate.parse(date);
-        return routePlanRepo.findByScheduleDate(scheduleDate);
-    }
-
-    @PutMapping("/update")
-    public String updateRoutePlan(@Valid @RequestBody RoutePlan routePlan) {
-        if (routePlan.getId() == null || !routePlanRepo.existsById(routePlan.getId())) {
-            return "RoutePlan not found.";
+        if (dto.getCarId() != null) {
+            carRepo.findById(dto.getCarId()).ifPresent(route::setCar);
         }
-        routePlanRepo.save(routePlan);
-        return "RoutePlan updated.";
+
+        // assign parcels if provided
+        if (dto.getParcelIds() != null) {
+            dto.getParcelIds().stream()
+                .map(parcelRepo::findById)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .forEach(p -> {
+                    p.setRoutePlan(route);
+                    route.getParcel().add(p);
+                });
+        }
+
+        RoutePlan saved = routePlanRepo.save(route);
+        RoutePlanDTO savedDto = new RoutePlanDTO(saved);
+
+        return ResponseEntity
+                .created(linkTo(methodOn(RoutePlanController.class)
+                        .getRoutePlan(savedDto.getId())).toUri())
+                .body(buildModel(savedDto, saved));
     }
 
+    // -------- READ ONE --------
+    @GetMapping
+    public ResponseEntity<EntityModel<RoutePlanDTO>> getRoutePlan(@RequestParam Long id) {
+        return routePlanRepo.findById(id)
+                .map(route -> {
+                    RoutePlanDTO dto = new RoutePlanDTO(route);
+                    return ResponseEntity.ok(buildModel(dto, route));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // -------- UPDATE --------
+    @PutMapping("/update")
+    public ResponseEntity<EntityModel<RoutePlanDTO>> updateRoutePlan(
+            @Valid @RequestBody RoutePlanDTO dto) {
+
+        if (dto.getId() == null || !routePlanRepo.existsById(dto.getId())) {
+            return ResponseEntity.notFound().build();
+        }
+
+        RoutePlan route = routePlanRepo.findById(dto.getId()).get();
+
+        // 1. Update basic fields
+        route.setStartLocation(dto.getStartLocation());
+        route.setEndLocation(dto.getEndLocation());
+        route.setDistance(dto.getDistance());
+        route.setEstimatedTime(dto.getEstimatedTime());
+        route.setScheduleDate(dto.getScheduleDate());
+        route.setStops(dto.getStops());
+
+        // 2. Update car assignment
+        if (dto.getCarId() != null) {
+            carRepo.findById(dto.getCarId()).ifPresent(route::setCar);
+        } else {
+            route.setCar(null);
+        }
+
+        // 3. Update parcels
+        // detach old
+        route.getParcel().forEach(p -> p.setRoutePlan(null));
+        route.getParcel().clear();
+
+        if (dto.getParcelIds() != null) {
+            dto.getParcelIds().stream()
+                .map(parcelRepo::findById)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .forEach(p -> {
+                    p.setRoutePlan(route);
+                    route.getParcel().add(p);
+                });
+        }
+
+        RoutePlan updated = routePlanRepo.save(route);
+        RoutePlanDTO updatedDto = new RoutePlanDTO(updated);
+
+        return ResponseEntity.ok(buildModel(updatedDto, updated));
+    }
+
+    // -------- DELETE --------
     @DeleteMapping("/delete")
-    public String deleteRoutePlan(@RequestParam Long id) {
+    public ResponseEntity<Void> deleteRoutePlan(@RequestParam Long id) {
         if (!routePlanRepo.existsById(id)) {
-            return "RoutePlan not found.";
+            return ResponseEntity.notFound().build();
         }
         routePlanRepo.deleteById(id);
-        return "RoutePlan deleted.";
+        return ResponseEntity.noContent().build();
+    }
+
+    // -------- FILTERS --------
+    @GetMapping("/by-date")
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByScheduleDate(
+            @RequestParam String date) {
+        LocalDate parsed = LocalDate.parse(date);
+        return wrapList(routePlanRepo.findByScheduleDate(parsed));
     }
 
     @GetMapping("/by-start-address")
-    public List<RoutePlan> getByStartAddress(@RequestParam String address) {
-        return routePlanRepo.findByStartLocation(address);
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStartAddress(
+            @RequestParam String address) {
+        return wrapList(routePlanRepo.findByStartLocation(address));
     }
 
     @GetMapping("/by-end-address")
-    public List<RoutePlan> getByEndAddress(@RequestParam String address) {
-        return routePlanRepo.findByEndLocation(address);
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByEndAddress(
+            @RequestParam String address) {
+        return wrapList(routePlanRepo.findByEndLocation(address));
     }
 
     @GetMapping("/by-start-fragment")
-    public List<RoutePlan> getByStartFragment(@RequestParam String fragment) {
-        return routePlanRepo.findByStartLocationContaining(fragment);
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStartFragment(
+            @RequestParam String fragment) {
+        return wrapList(routePlanRepo.findByStartLocationContaining(fragment));
     }
 
     @GetMapping("/by-end-fragment")
-    public List<RoutePlan> getByEndFragment(@RequestParam String fragment) {
-        return routePlanRepo.findByEndLocationContaining(fragment);
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByEndFragment(
+            @RequestParam String fragment) {
+        return wrapList(routePlanRepo.findByEndLocationContaining(fragment));
     }
 
     @GetMapping("/by-stop-address")
-    public List<RoutePlan> getByStopAddress(@RequestParam String address) {
-        return routePlanRepo.findByStops(address);
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStopAddress(
+            @RequestParam String address) {
+        return wrapList(routePlanRepo.findByStops(address));
     }
 
     @GetMapping("/by-stop-fragment")
-    public List<RoutePlan> getByStopFragment(@RequestParam String fragment) {
-        return routePlanRepo.findByStopsContaining(fragment);
+    public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStopFragment(
+            @RequestParam String fragment) {
+        return wrapList(routePlanRepo.findByStopsContaining(fragment));
+    }
+
+    // -------- HELPERS --------
+
+    private EntityModel<RoutePlanDTO> buildModel(RoutePlanDTO dto, RoutePlan route) {
+        EntityModel<RoutePlanDTO> model = EntityModel.of(dto,
+            linkTo(methodOn(RoutePlanController.class).getRoutePlan(dto.getId())).withSelfRel()
+        );
+
+        if (route.getCar() != null) {
+            model.add(linkTo(methodOn(CarController.class)
+                .getCarByRegistrationNumber(route.getCar().getRegistrationNumber()))
+                .withRel("car"));
+        }
+
+        if (dto.getParcelIds() != null) {
+            dto.getParcelIds().forEach(pid ->
+                model.add(linkTo(methodOn(ParcelController.class).getParcel(pid))
+                    .withRel("parcel"))
+            );
+        }
+
+        return model;
+    }
+
+    private ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> wrapList(List<RoutePlan> list) {
+        List<EntityModel<RoutePlanDTO>> dtos = list.stream()
+            .map(r -> buildModel(new RoutePlanDTO(r), r))
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(CollectionModel.of(dtos));
     }
 }
