@@ -18,8 +18,8 @@ VALUES
 INSERT INTO route_plan (id, start_location, end_location, distance, estimated_time, scheduled_date, car_id)
 VALUES 
   (1, 'ul. Warszawska 10, 00-001 Warszawa', 'ul. Krakowska 20, 30-001 Kraków', 300.0, 240, DATE '2025-04-25', 1),
-  (2, 'ul. Śląska 5,   40-001 Katowice',    'ul. Poznańska 7, 60-001 Poznań',   400.0, 300, DATE '2025-04-26', 2),
-  (3, 'ul. Polna 3,    80-200 Gdańsk',      'ul. Morska 12, 81-001 Gdynia',     25.0,  30,  DATE '2025-05-01', 3);
+  (2, 'ul. Śląska 5,   40-001 Katowice',    'ul. Poznańska 7, 60-001 Poznań', 400.0, 300, DATE '2025-04-26', 2),
+  (3, 'ul. Polna 3,    80-200 Gdańsk',      'ul. Morska 12, 81-001 Gdynia', 25.0,  30,  DATE '2025-05-01', 3);
 
 -- ROUTE_STOPS --
 INSERT INTO route_stops (route_plan_id, stop_address)
