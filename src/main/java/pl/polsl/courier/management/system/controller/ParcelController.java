@@ -1,7 +1,6 @@
 package pl.polsl.courier.management.system.controller;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -13,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.validation.Valid;
 import pl.polsl.courier.management.system.dto.ParcelDTO;
 import pl.polsl.courier.management.system.entity.Parcel;
 import pl.polsl.courier.management.system.repository.ParcelRepository;
@@ -29,9 +29,8 @@ public class ParcelController {
     @Autowired private ClientRepository clientRepo;
     @Autowired private RoutePlanRepository routePlanRepo;
 
-    // CREATE
     @PostMapping
-    public ResponseEntity<EntityModel<ParcelDTO>> addParcel(@RequestBody ParcelDTO dto) {
+    public ResponseEntity<EntityModel<ParcelDTO>> addParcel(@Valid @RequestBody ParcelDTO dto) {
         Parcel p = new Parcel();
         p.setContentDescription(dto.getContentDescription());
         p.setSenderAddress(dto.getSenderAddress());
@@ -60,88 +59,61 @@ public class ParcelController {
         return ResponseEntity.status(HttpStatus.CREATED).body(model);
     }
 
-    // READ ONE
     @GetMapping("/{id}")
     public ResponseEntity<EntityModel<ParcelDTO>> getParcel(@PathVariable Long id) {
-        return parcelRepo.findById(id)
-            .map(p -> {
-                ParcelDTO dto = new ParcelDTO(p);
-                EntityModel<ParcelDTO> model = EntityModel.of(dto,
-                    linkTo(methodOn(ParcelController.class).getParcel(id)).withSelfRel(),
-                    linkTo(methodOn(ClientController.class).getById(dto.getClientId())).withRel("client"),
-                    linkTo(methodOn(RoutePlanController.class).getRoutePlan(dto.getRoutePlanId())).withRel("routePlan")
-                );
-                return ResponseEntity.ok(model);
-            })
-            .orElse(ResponseEntity.notFound().build());
+        Parcel parcel = parcelRepo.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Parcel not found with id: " + id
+            ));
+
+        return ResponseEntity.ok(toModel(parcel));
     }
 
-    // READ ALL
     @GetMapping
     public ResponseEntity<CollectionModel<EntityModel<ParcelDTO>>> getAllParcels() {
         List<EntityModel<ParcelDTO>> list = StreamSupport.stream(parcelRepo.findAll().spliterator(), false)
-            .map(p -> {
-                ParcelDTO dto = new ParcelDTO(p);
-                return EntityModel.of(dto,
-                    linkTo(methodOn(ParcelController.class).getParcel(p.getId())).withSelfRel()
-                );
-            })
+            .map(this::toModel)
             .collect(Collectors.toList());
 
         return ResponseEntity.ok(CollectionModel.of(list,
-            linkTo(methodOn(ParcelController.class).getAllParcels()).withSelfRel()));
+            linkTo(methodOn(ParcelController.class).getAllParcels()).withSelfRel()
+        ));
     }
 
-    // UPDATE
     @PutMapping("/{id}")
     public ResponseEntity<EntityModel<ParcelDTO>> updateParcel(
             @PathVariable Long id,
-            @RequestBody ParcelDTO dto) {
+            @Valid @RequestBody ParcelDTO dto) {
 
-        return parcelRepo.findById(id)
-            .map(p -> {
-                // update fields
-                p.setContentDescription(dto.getContentDescription());
-                p.setSenderAddress(dto.getSenderAddress());
-                p.setRecipientAddress(dto.getRecipientAddress());
-                p.setDispatchDate(dto.getDispatchDate());
-                p.setDeliveryDate(dto.getDeliveryDate());
-                p.setWeight(dto.getWeight());
-                p.setPrice(dto.getPrice());
+        Parcel p = parcelRepo.findById(id)
+            .orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Parcel not found with id: " + id)
+            );
 
-                // client
-                if (dto.getClientId() != null) {
-                    clientRepo.findById(dto.getClientId()).ifPresent(p::setClient);
-                } else {
-                    p.setClient(null);
-                }
-                // routePlan
-                if (dto.getRoutePlanId() != null) {
-                    routePlanRepo.findById(dto.getRoutePlanId()).ifPresent(p::setRoutePlan);
-                } else {
-                    p.setRoutePlan(null);
-                }
-
-                Parcel updated = parcelRepo.save(p);
-                ParcelDTO updatedDto = new ParcelDTO(updated);
-
-                EntityModel<ParcelDTO> model = EntityModel.of(updatedDto,
-                    linkTo(methodOn(ParcelController.class).getParcel(id)).withSelfRel(),
-                    linkTo(methodOn(ClientController.class).getById(updatedDto.getClientId())).withRel("client"),
-                    linkTo(methodOn(RoutePlanController.class).getRoutePlan(updatedDto.getRoutePlanId())).withRel("routePlan")
-                );
-                return ResponseEntity.ok(model);
-            })
-            .orElse(ResponseEntity.notFound().build());
+        Parcel updated = parcelRepo.save(p);
+        return ResponseEntity.ok(toModel(updated));
     }
 
-    // DELETE
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteParcel(@PathVariable Long id) {
         if (!parcelRepo.existsById(id)) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "Parcel not found with id: " + id);
         }
         parcelRepo.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+
+    private EntityModel<ParcelDTO> toModel(Parcel p) {
+        ParcelDTO dto = new ParcelDTO(p);
+        EntityModel<ParcelDTO> model = EntityModel.of(dto,
+            linkTo(methodOn(ParcelController.class).getParcel(p.getId())).withSelfRel(),
+            linkTo(methodOn(ClientController.class).getById(dto.getClientId())).withRel("client"),
+            linkTo(methodOn(RoutePlanController.class).getRoutePlan(dto.getRoutePlanId())).withRel("routePlan")
+        );
+        return model;
     }
 }

@@ -12,8 +12,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.validation.Valid;
 import pl.polsl.courier.management.system.dto.CarDTO;
-import pl.polsl.courier.management.system.entity.Car;
+import pl.polsl.courier.management.system.entity.Car;	
 import pl.polsl.courier.management.system.repository.CarRepository;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
@@ -42,7 +43,7 @@ public class CarController {
     }
 
     @PostMapping
-    public ResponseEntity<EntityModel<CarDTO>> addCar(@RequestBody CarDTO dto) {
+    public ResponseEntity<EntityModel<CarDTO>> addCar(@Valid @RequestBody CarDTO dto) {
         if (carRepo.existsByRegistrationNumber(dto.getRegistrationNumber())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Car with registration number '" + dto.getRegistrationNumber() + "' already exists");
@@ -80,7 +81,7 @@ public class CarController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<EntityModel<CarDTO>> updateCar(@PathVariable Long id, @RequestBody CarDTO dto) {
+    public ResponseEntity<EntityModel<CarDTO>> updateCar(@PathVariable Long id,@Valid @RequestBody CarDTO dto) {
         Car car = carRepo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Car not found"));
 

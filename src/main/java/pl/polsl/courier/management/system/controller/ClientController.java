@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.validation.Valid;
 import pl.polsl.courier.management.system.dto.ClientDTO;
 import pl.polsl.courier.management.system.entity.Client;
 import pl.polsl.courier.management.system.repository.ClientRepository;
@@ -25,7 +26,14 @@ public class ClientController {
     private ClientRepository clientRepo;
 
     @PostMapping
-    public ResponseEntity<EntityModel<ClientDTO>> addClient(@RequestBody ClientDTO dto) {
+    public ResponseEntity<EntityModel<ClientDTO>> addClient(@Valid @RequestBody ClientDTO dto) {
+        if (clientRepo.existsByEmail(dto.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already in use");
+        }
+        if (clientRepo.existsByPhoneNumber(dto.getPhoneNumber())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone number already in use");
+        }
+
         Client client = new Client();
         client.setFirstName(dto.getFirstName());
         client.setLastName(dto.getLastName());
@@ -39,7 +47,6 @@ public class ClientController {
         EntityModel<ClientDTO> model = EntityModel.of(savedDto,
             linkTo(methodOn(ClientController.class).getById(savedDto.getId())).withSelfRel()
         );
-        // add parcel links
         savedDto.getParcelIds().forEach(pid ->
             model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
         );
@@ -47,44 +54,47 @@ public class ClientController {
         return ResponseEntity.status(HttpStatus.CREATED).body(model);
     }
 
-    @PutMapping("/update/{id}")
+    @PutMapping("/{id}")
     public ResponseEntity<EntityModel<ClientDTO>> updateClient(
             @PathVariable Long id,
-            @RequestBody ClientDTO dto) {
+            @Valid @RequestBody ClientDTO dto) {
 
-        return clientRepo.findById(id)
-            .map(client -> {
-                client.setFirstName(dto.getFirstName());
-                client.setLastName(dto.getLastName());
-                client.setEmail(dto.getEmail());
-                client.setPhoneNumber(dto.getPhoneNumber());
-                client.setAddress(dto.getAddress());
+        Client client = clientRepo.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found"));
 
-                Client updated = clientRepo.save(client);
-                ClientDTO updatedDto = new ClientDTO(updated);
+        if (clientRepo.existsByEmailAndIdNot(dto.getEmail(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already in use");
+        }
+        if (clientRepo.existsByPhoneNumberAndIdNot(dto.getPhoneNumber(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone number already in use");
+        }
 
-                EntityModel<ClientDTO> model = EntityModel.of(updatedDto,
-                    linkTo(methodOn(ClientController.class).getById(updatedDto.getId())).withSelfRel()
-                );
-                // add parcel links
-                updatedDto.getParcelIds().forEach(pid ->
-                    model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
-                );
+        client.setFirstName(dto.getFirstName());
+        client.setLastName(dto.getLastName());
+        client.setEmail(dto.getEmail());
+        client.setPhoneNumber(dto.getPhoneNumber());
+        client.setAddress(dto.getAddress());
 
-                return ResponseEntity.ok(model);
-            })
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found")
-            );
+        Client updated = clientRepo.save(client);
+        ClientDTO updatedDto = new ClientDTO(updated);
+
+        EntityModel<ClientDTO> model = EntityModel.of(updatedDto,
+            linkTo(methodOn(ClientController.class).getById(updatedDto.getId())).withSelfRel()
+        );
+        updatedDto.getParcelIds().forEach(pid ->
+            model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
+        );
+
+        return ResponseEntity.ok(model);
     }
 
-    @DeleteMapping("/delete/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteClient(@PathVariable Long id) {
         if (!clientRepo.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found");
         }
         clientRepo.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build(); 	
     }
 
     @GetMapping("/{id}")
@@ -105,103 +115,123 @@ public class ClientController {
             .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/search/firstName")
-    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByFirstName(@RequestParam String firstName) {
-        List<EntityModel<ClientDTO>> clients = clientRepo.findByFirstName(firstName).stream()
-            .map(client -> {
-                ClientDTO dto = new ClientDTO(client);
-                EntityModel<ClientDTO> model = EntityModel.of(dto,
-                    linkTo(methodOn(ClientController.class).getById(client.getId())).withSelfRel()
-                );
-                dto.getParcelIds().forEach(pid ->
-                    model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
-                );
-                return model;
-            })
+    @GetMapping("/firstName/{firstName}")
+    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByFirstName(
+            @PathVariable String firstName) {
+
+        List<Client> found = clientRepo.findByFirstName(firstName);
+        if (found.isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No clients with firstName = '" + firstName + "'"
+            );
+        }
+
+        List<EntityModel<ClientDTO>> clients = found.stream()
+            .map(this::toModel)
             .collect(Collectors.toList());
 
-        return ResponseEntity.ok(CollectionModel.of(clients,
-            linkTo(methodOn(ClientController.class).getByFirstName(firstName)).withSelfRel()
-        ));
+        return ResponseEntity.ok(
+            CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByFirstName(firstName)).withSelfRel()
+            )
+        );
     }
 
-    @GetMapping("/search/lastName")
-    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByLastName(@RequestParam String lastName) {
-        List<EntityModel<ClientDTO>> clients = clientRepo.findByLastName(lastName).stream()
-            .map(client -> {
-                ClientDTO dto = new ClientDTO(client);
-                EntityModel<ClientDTO> model = EntityModel.of(dto,
-                    linkTo(methodOn(ClientController.class).getById(client.getId())).withSelfRel()
-                );
-                dto.getParcelIds().forEach(pid ->
-                    model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
-                );
-                return model;
-            })
+    @GetMapping("/lastName/{lastName}")
+    public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByLastName(
+            @PathVariable String lastName) {
+
+        List<Client> found = clientRepo.findByLastName(lastName);
+        if (found.isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No clients with lastName = '" + lastName + "'"
+            );
+        }
+
+        List<EntityModel<ClientDTO>> clients = found.stream()
+            .map(this::toModel)
             .collect(Collectors.toList());
 
-        return ResponseEntity.ok(CollectionModel.of(clients,
-            linkTo(methodOn(ClientController.class).getByLastName(lastName)).withSelfRel()
-        ));
+        return ResponseEntity.ok(
+            CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByLastName(lastName)).withSelfRel()
+            )
+        );
     }
 
-    @GetMapping("/search/email")
-    public ResponseEntity<EntityModel<ClientDTO>> getByEmail(@RequestParam String email) {
+    @GetMapping("/email/{email}")
+    public ResponseEntity<EntityModel<ClientDTO>> getByEmail(
+            @PathVariable String email) {
+
         return clientRepo.findByEmail(email)
-            .map(client -> {
-                ClientDTO dto = new ClientDTO(client);
-                EntityModel<ClientDTO> model = EntityModel.of(dto,
-                    linkTo(methodOn(ClientController.class).getByEmail(email)).withSelfRel(),
-                    linkTo(methodOn(ClientController.class).getById(dto.getId())).withRel("byId")
-                );
-                dto.getParcelIds().forEach(pid ->
-                    model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
-                );
-                return ResponseEntity.ok(model);
-            })
-            .orElse(ResponseEntity.notFound().build());
+            .map(client -> ResponseEntity.ok(toModel(client)))
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Client with email = '" + email + "' not found"
+                )
+            );
     }
 
-    @GetMapping("/search/phone")
+    @GetMapping("/phone/{phoneNumber}")
     public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByPhoneNumber(
-            @RequestParam String phoneNumber) {
-        List<EntityModel<ClientDTO>> clients = clientRepo.findByPhoneNumber(phoneNumber).stream()
-            .map(client -> {
-                ClientDTO dto = new ClientDTO(client);
-                EntityModel<ClientDTO> model = EntityModel.of(dto,
-                    linkTo(methodOn(ClientController.class).getById(client.getId())).withSelfRel()
-                );
-                dto.getParcelIds().forEach(pid ->
-                    model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
-                );
-                return model;
-            })
+            @PathVariable String phoneNumber) {
+
+        List<Client> found = clientRepo.findByPhoneNumber(phoneNumber);
+        if (found.isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No clients with phoneNumber = '" + phoneNumber + "'"
+            );
+        }
+
+        List<EntityModel<ClientDTO>> clients = found.stream()
+            .map(this::toModel)
             .collect(Collectors.toList());
 
-        return ResponseEntity.ok(CollectionModel.of(clients,
-            linkTo(methodOn(ClientController.class).getByPhoneNumber(phoneNumber)).withSelfRel()
-        ));
+        return ResponseEntity.ok(
+            CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class).getByPhoneNumber(phoneNumber)).withSelfRel()
+            )
+        );
     }
 
-    @GetMapping("/search/name")
+    @GetMapping("/name/{firstName}/{lastName}")
     public ResponseEntity<CollectionModel<EntityModel<ClientDTO>>> getByFirstAndLastName(
-            @RequestParam String firstName,
-            @RequestParam String lastName) {
-        List<EntityModel<ClientDTO>> clients = clientRepo.findByFirstNameAndLastName(firstName, lastName).stream()
-            .map(client -> {
-                ClientDTO dto = new ClientDTO(client);
-                EntityModel<ClientDTO> model = EntityModel.of(dto,
-                    linkTo(methodOn(ClientController.class).getById(client.getId())).withSelfRel()
-                );
-                dto.getParcelIds().forEach(pid ->
-                    model.add(linkTo(methodOn(ParcelController.class).getParcel(pid)).withRel("parcel"))
-                );
-                return model;
-            })
+            @PathVariable String firstName,
+            @PathVariable String lastName) {
+
+        List<Client> found = clientRepo.findByFirstNameAndLastName(firstName, lastName);
+        if (found.isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No clients with name = '" + firstName + " " + lastName + "'"
+            );
+        }
+
+        List<EntityModel<ClientDTO>> clients = found.stream()
+            .map(this::toModel)
             .collect(Collectors.toList());
 
-        return ResponseEntity.ok(CollectionModel.of(clients,
-            linkTo(methodOn(ClientController.class).getByFirstAndLastName(firstName, lastName)).withSelfRel()
-        ));
+        return ResponseEntity.ok(
+            CollectionModel.of(clients,
+                linkTo(methodOn(ClientController.class)
+                    .getByFirstAndLastName(firstName, lastName))
+                .withSelfRel()
+            )
+        );
+    }
+    
+    private EntityModel<ClientDTO> toModel(Client client) {
+        ClientDTO dto = new ClientDTO(client);
+        EntityModel<ClientDTO> model = EntityModel.of(dto,
+            linkTo(methodOn(ClientController.class).getById(client.getId())).withSelfRel()
+        );
+        dto.getParcelIds().forEach(pid ->
+            model.add(linkTo(methodOn(ParcelController.class).getParcel(pid))
+                .withRel("parcel")));
+        return model;
     }
 }

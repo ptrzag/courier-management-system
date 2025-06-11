@@ -6,7 +6,6 @@ import java.util.List;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,16 +17,16 @@ public class RoutePlan {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
-    // Wymuszony format: "<dowolny tekst bez przecinka>, <2 cyfry>-<3 cyfry> <dowolny tekst>"
+    // Forced format: "<any text without comma>, <2 digits>-<3 digits> <any text>"
     @Pattern(
       regexp = "^[^,]+,\\s*\\d{2}-\\d{3}\\s+.+$",
-      message = "Format adresu: 'ul. Przykładowa 10, 00-950 Warszawa'"
+      message = "Address format: 'ul. Przykładowa 10, 00-950 Warszawa'"
     )
     private String startLocation;
 
     @Pattern(
       regexp = "^[^,]+,\\s*\\d{2}-\\d{3}\\s+.+$",
-      message = "Format adresu: 'ul. Przykładowa 10, 00-950 Warszawa'"
+      message = "Address format: 'ul. Przykładowa 10, 00-950 Warszawa'"
     )
     private String endLocation;
 
@@ -46,12 +45,11 @@ public class RoutePlan {
     private List<
       @Pattern(
         regexp = "^[^,]+,\\s*\\d{2}-\\d{3}\\s+.+$",
-        message = "Format przystanku: 'ul. Przykładowa 10, 00-950 Warszawa'"
+        message = "Stop format: 'ul. Przykładowa 10, 00-950 Warszawa'"
       )
       String
     > stops;
 
-    //@JsonIgnore - mozliwe ze konieczny, ale inaczej nie dziala update
     @OneToMany(mappedBy = "routePlan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Parcel> parcel = new ArrayList<>();
 
