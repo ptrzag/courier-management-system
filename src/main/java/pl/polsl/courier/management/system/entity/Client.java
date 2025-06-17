@@ -2,18 +2,10 @@ package pl.polsl.courier.management.system.entity;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 @Entity
 @Getter
@@ -25,21 +17,30 @@ import lombok.Setter;
     @UniqueConstraint(columnNames = "phone_number")
   }
 )
+@Schema(name = "Client", description = "Dane klienta korzystającego z usług kurierskich")
 public class Client {
-	@Id
-	@GeneratedValue(strategy = GenerationType.AUTO)
-	private Long id;
-	private String firstName;
-	private String lastName;
-	
-	@Column(name = "email",    nullable = false, unique = true)
-	private String email;
-	
-	@Column(name = "phone_number", nullable = false, unique = true)
-	private String phoneNumber;
-	
-	private String address;
-	
-	@OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
-	private List<Parcel> parcels = new ArrayList<>();
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Schema(description = "Unikalny identyfikator klienta", example = "42")
+    private Long id;
+
+    @Schema(description = "Imię klienta", example = "Jan")
+    private String firstName;
+
+    @Schema(description = "Nazwisko klienta", example = "Kowalski")
+    private String lastName;
+
+    @Column(nullable = false, unique = true)
+    @Schema(description = "Email klienta", example = "jan.kowalski@example.com")
+    private String email;
+
+    @Column(name = "phone_number", nullable = false, unique = true)
+    @Schema(description = "Numer telefonu", example = "+48123123123")
+    private String phoneNumber;
+
+    @Schema(description = "Adres klienta", example = "ul. Przykładowa 10, 00-950 Warszawa")
+    private String address;
+
+    @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Parcel> parcels = new ArrayList<>();
 }

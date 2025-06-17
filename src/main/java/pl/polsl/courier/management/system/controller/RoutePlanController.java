@@ -6,23 +6,32 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import jakarta.validation.Valid;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import pl.polsl.courier.management.system.dto.RoutePlanDTO;
 import pl.polsl.courier.management.system.entity.RoutePlan;
 import pl.polsl.courier.management.system.repository.CarRepository;
-import pl.polsl.courier.management.system.repository.RoutePlanRepository;
 import pl.polsl.courier.management.system.repository.ParcelRepository;
+import pl.polsl.courier.management.system.repository.RoutePlanRepository;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
+@Tag(name = "PlanyTrasy", description = "Operacje na zasobie Plan trasy")
 @RestController
 @RequestMapping("/route")
 @Validated
@@ -35,6 +44,12 @@ public class RoutePlanController {
     @Autowired
     private ParcelRepository parcelRepo;
 
+    @Operation(summary = "Dodaj nowy plan trasy")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Plan trasy utworzony",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane wejściowe")
+    })
     @PostMapping
     public ResponseEntity<EntityModel<RoutePlanDTO>> addRoutePlan(
             @Valid @RequestBody RoutePlanDTO dto) {
@@ -47,17 +62,30 @@ public class RoutePlanController {
             .body(toModel(saved));
     }
 
+    @Operation(summary = "Pobierz plan trasy po ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Plan trasy znaleziony",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Plan trasy nie znaleziony")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<EntityModel<RoutePlanDTO>> getRoutePlan(
             @PathVariable Long id) {
         RoutePlan route = routePlanRepo.findById(id)
             .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "Route not found with id: " + id
+                "Plan trasy nie znaleziony z ID: " + id
             ));
         return ResponseEntity.ok(toModel(route));
     }
 
+    @Operation(summary = "Aktualizuj plan trasy po ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Plan trasy zaktualizowany",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Plan trasy nie znaleziony"),
+        @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane wejściowe")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<EntityModel<RoutePlanDTO>> updateRoutePlan(
             @PathVariable Long id,
@@ -65,26 +93,36 @@ public class RoutePlanController {
         RoutePlan route = routePlanRepo.findById(id)
             .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "Cannot update. Route not found with id: " + id
+                "Nie można zaktualizować. Plan trasy nie znaleziony z ID: " + id
             ));
         applyDto(route, dto);
         RoutePlan updated = routePlanRepo.save(route);
         return ResponseEntity.ok(toModel(updated));
     }
 
+    @Operation(summary = "Usuń plan trasy po ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Plan trasy usunięty"),
+        @ApiResponse(responseCode = "404", description = "Plan trasy nie znaleziony")
+    })
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRoutePlan(
-            @PathVariable Long id) {
+    public ResponseEntity<Void> deleteRoutePlan(@PathVariable Long id) {
         if (!routePlanRepo.existsById(id)) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "Cannot delete. Route not found with id: " + id
+                "Nie można usunąć. Plan trasy nie znaleziony z ID: " + id
             );
         }
         routePlanRepo.deleteById(id);
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Pobierz plany trasy po dacie realizacji")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tej daty")
+    })
     @GetMapping("/date/{date}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByScheduleDate(
             @PathVariable String date) {
@@ -93,12 +131,18 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found for date: " + date
+                "Brak planów trasy dla daty: " + date
             );
         }
         return wrapList(list);
     }
 
+    @Operation(summary = "Pobierz plany trasy po punkcie startowym")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tego punktu startowego")
+    })
     @GetMapping("/start/{address}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStartLocation(
             @PathVariable String address) {
@@ -106,12 +150,18 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found starting at: " + address
+                "Brak planów trasy zaczynających się na: " + address
             );
         }
         return wrapList(list);
     }
 
+    @Operation(summary = "Pobierz plany trasy zawierające fragment adresu startowego")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tego fragmentu")
+    })
     @GetMapping("/start/fragment/{fragment}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStartFragment(
             @PathVariable String fragment) {
@@ -119,12 +169,18 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found with start containing: " + fragment
+                "Brak planów trasy zawierających start: " + fragment
             );
         }
         return wrapList(list);
     }
 
+    @Operation(summary = "Pobierz plany trasy po punkcie końcowym")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tego punktu końcowego")
+    })
     @GetMapping("/end/{address}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByEndLocation(
             @PathVariable String address) {
@@ -132,12 +188,18 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found ending at: " + address
+                "Brak planów trasy kończących się na: " + address
             );
         }
         return wrapList(list);
     }
 
+    @Operation(summary = "Pobierz plany trasy zawierające fragment adresu końcowego")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tego fragmentu")
+    })
     @GetMapping("/end/fragment/{fragment}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByEndFragment(
             @PathVariable String fragment) {
@@ -145,12 +207,18 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found with end containing: " + fragment
+                "Brak planów trasy zawierających koniec: " + fragment
             );
         }
         return wrapList(list);
     }
 
+    @Operation(summary = "Pobierz plany trasy po przystanku")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tego przystanku")
+    })
     @GetMapping("/stop/{address}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStop(
             @PathVariable String address) {
@@ -158,12 +226,18 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found stopping at: " + address
+                "Brak planów trasy zatrzymujących się na: " + address
             );
         }
         return wrapList(list);
     }
 
+    @Operation(summary = "Pobierz plany trasy zawierające fragment przystanku")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Listę planów trasy zwrócono",
+            content = @Content(schema = @Schema(implementation = RoutePlanDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Brak planów trasy dla tego fragmentu")
+    })
     @GetMapping("/stop/fragment/{fragment}")
     public ResponseEntity<CollectionModel<EntityModel<RoutePlanDTO>>> getByStopFragment(
             @PathVariable String fragment) {
@@ -171,7 +245,7 @@ public class RoutePlanController {
         if (list.isEmpty()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No routes found with stop containing: " + fragment
+                "Brak planów trasy zawierających przystanek: " + fragment
             );
         }
         return wrapList(list);
